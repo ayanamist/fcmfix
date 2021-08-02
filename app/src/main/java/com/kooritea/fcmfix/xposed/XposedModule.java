@@ -6,9 +6,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.UserManager;
-import android.util.Log;
-
-import com.kooritea.fcmfix.util.ContentProviderHelper;
 
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
@@ -48,22 +45,29 @@ public abstract class XposedModule {
                 }
             } else {
                 isRegisterUnlockBroadcastReceive = true;
-                IntentFilter userUnlockIntentFilter = new IntentFilter();
-                userUnlockIntentFilter.addAction(Intent.ACTION_USER_UNLOCKED);
-                AndroidAppHelper.currentApplication().getApplicationContext().registerReceiver(unlockBroadcastReceive, userUnlockIntentFilter);
+                AndroidAppHelper.currentApplication().getApplicationContext().registerReceiver(unlockBroadcastReadConfigReceiver, new IntentFilter(Intent.ACTION_USER_UNLOCKED));
+                AndroidAppHelper.currentApplication().getApplicationContext().registerReceiver(new BroadcastReceiver() {
+                    public void onReceive(Context context1, Intent intent) {
+                        String action = intent.getAction();
+                        if (Intent.ACTION_USER_UNLOCKED.equals(action)) {
+                            printLog("Send broadcast GCM_RECONNECT due to screen on");
+                            AndroidAppHelper.currentApplication().getApplicationContext().sendBroadcast(new Intent("com.google.android.intent.action.GCM_RECONNECT"));
+                        }
+                    }
+                }, new IntentFilter(Intent.ACTION_SCREEN_ON));
             }
         }
 
     }
 
-    private BroadcastReceiver unlockBroadcastReceive = new BroadcastReceiver() {
+    private BroadcastReceiver unlockBroadcastReadConfigReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             if (Intent.ACTION_USER_UNLOCKED.equals(action)) {
                 printLog("User Device Unlock Broadcast");
                 try {
                     onCanReadConfig();
-                    AndroidAppHelper.currentApplication().getApplicationContext().unregisterReceiver(unlockBroadcastReceive);
+                    AndroidAppHelper.currentApplication().getApplicationContext().unregisterReceiver(unlockBroadcastReadConfigReceiver);
                     isRegisterUnlockBroadcastReceive = false;
                 } catch (Exception e) {
                     printLog("读取配置文件初始化失败: " + e.getMessage());
@@ -71,4 +75,5 @@ public abstract class XposedModule {
             }
         }
     };
+
 }

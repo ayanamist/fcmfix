@@ -144,16 +144,21 @@ public class ReconnectManagerFix extends XposedModule {
                 // 防止计时器出现负数计时,分别是心跳计时和重连计时
                 Intent intent = (Intent) XposedHelpers.getObjectField(param.thisObject, sharedPreferences.getString("timer_intent_property", ""));
                 if ("com.google.android.intent.action.GCM_RECONNECT".equals(intent.getAction()) || "com.google.android.gms.gcm.HEARTBEAT_ALARM".equals(intent.getAction())) {
-                    new Timer("ReconnectManagerFix").schedule(new TimerTask() {
+                    final Timer timer = new Timer("ReconnectManagerFix");
+                    timer.schedule(new TimerTask() {
                         @Override
                         public void run() {
-                            long nextConnectionTime = XposedHelpers.getLongField(param.thisObject, sharedPreferences.getString("timer_next_time_property", ""));
-                            if (nextConnectionTime != 0 && nextConnectionTime - SystemClock.elapsedRealtime() < 0) {
-                                AndroidAppHelper.currentApplication().getApplicationContext().sendBroadcast(new Intent("com.google.android.intent.action.GCM_RECONNECT"));
-                                printLog("Send broadcast GCM_RECONNECT");
+                            try {
+                                long nextConnectionTime = XposedHelpers.getLongField(param.thisObject, sharedPreferences.getString("timer_next_time_property", ""));
+                                if (nextConnectionTime != 0 && nextConnectionTime - SystemClock.elapsedRealtime() < 0) {
+                                    AndroidAppHelper.currentApplication().getApplicationContext().sendBroadcast(new Intent("com.google.android.intent.action.GCM_RECONNECT"));
+                                    printLog("Send broadcast GCM_RECONNECT due to negative interval");
+                                }
+                            } finally {
+                                timer.cancel();
                             }
                         }
-                    }, (long) param.args[0] + 5000);
+                    }, Math.max(0, (long) param.args[0]) + 5000L);
                 }
             }
         });
